@@ -1,0 +1,82 @@
+========================================================
+  FIND_ACTIVITIES.BAT - KULLANIM KILAVUZU
+========================================================
+
+AMAÇ:
+------
+Bir APK dosyasının içindeki tüm ekranları (Activity) listelemek
+ve özellikle "Install" ile ilgili gizli ekranları bulmak.
+
+ÇALIŞMA PRENSİBİ:
+-----------------
+Android uygulamaları birden fazla "Activity" (ekran) içerir.
+Bazı ekranlar kullanıcıya gösterilmez, sadece özel komutlarla açılır.
+
+Bu script:
+1. APK'yı decompile eder
+2. AndroidManifest.xml dosyasını okur
+3. Tüm Activity'leri listeler
+4. "Install", "Package", "Update", "Download" kelimelerini içerenleri işaretler
+
+KULLANIM:
+---------
+1. Analiz etmek istediğiniz APK'yı scriptin üzerine sürükleyin
+2. Script size şunları gösterir:
+   - Paket İsmi
+   - Install ile ilgili Activity'ler
+   - Tüm Activity'lerin listesi
+
+ÖRNEK ÇIKTI:
+------------
+PAKET ISMI:
+com.kugou.android.auto
+
+BULUNAN "INSTALL" AKTIVITELERI:
+[+] POTANSIYEL HEDEF: com.kugou.android.auto.dialog.AppUpdateDialogActivity
+    Exported: true
+    (Intent Filter var - Tetiklenebilir!)
+
+TUM AKTIVITELER:
+com.kugou.android.auto.ui.activity.SplashPureActivity
+com.kugou.android.auto.ui.activity.main.MediaActivity
+...
+
+BU BİLGİYİ NASIL KULLANIRSINIZ:
+--------------------------------
+Eğer "exported=true" olan bir Install Activity bulursanız,
+şu komutla doğrudan açabilirsiniz:
+
+adb shell am start -n PAKET_ISMI/.ACTIVITY_ISMI
+
+Örnek:
+adb shell am start -n com.kugou.android.auto/.dialog.AppUpdateDialogActivity
+
+Bu ekran açılırsa:
+- Belki bir dosya seçme ekranı görürsünüz
+- Belki APK yükleme seçeneği çıkar
+- Belki gizli bir ayarlar menüsü açılır
+
+EXPORTED NEDİR:
+---------------
+exported="true" → Dışarıdan tetiklenebilir (ADB ile açılabilir)
+exported="false" → Sadece uygulama içinden açılabilir
+
+INTENT FILTER NEDİR:
+--------------------
+Intent Filter varsa, Activity özel komutlarla tetiklenebilir.
+Örneğin:
+- Dosya açma
+- URL açma
+- Özel eylemler
+
+BAŞARI İHTİMALİ:
+----------------
+- Activity Bulma: %100 (Her APK'da vardır)
+- Kullanışlı Activity Bulma: %40 (Şansa bağlı)
+- Activity'yi Tetikleme: %60 (exported=true olmalı)
+
+NE ZAMAN KULLANILMALI:
+-----------------------
+- Market veya sistem uygulamalarını analiz ederken
+- Gizli yükleme ekranları ararken
+- Uygulamanın iç yapısını öğrenmek isterken

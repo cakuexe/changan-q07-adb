@@ -1,0 +1,98 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+echo ========================================================
+echo      VECENTEK BYPASS ATTACK TOOL (ADB)
+echo ========================================================
+echo.
+
+if "%~1"=="" (
+    echo [!] Lutfen bir APK dosyasini bu scriptin uzerine surukleyin!
+    echo.
+    pause
+    exit /b
+)
+
+set "INPUT_APK=%~1"
+set "FILENAME=%~n1"
+
+echo [*] Hedef APK: %INPUT_APK%
+echo [*] ADB Baglantisi kontrol ediliyor...
+adb devices
+echo.
+
+:: --- ATTACK 1: STOP SERVICE & INSTALL ---
+echo [ATTACK 1] Servisi Durdur ve Yukle (Hitman)...
+echo   [*] Servis durduruluyor...
+adb shell stop vecentekseservice
+adb shell setprop ctl.stop vecentekseservice
+echo   [*] Yukleme deneniyor...
+adb install -r "%INPUT_APK%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 2: INSTALLER SPOOFING (Play Store) ---
+echo [ATTACK 2] Play Store Taklidi (-i com.android.vending)...
+adb install -i "com.android.vending" -r "%INPUT_APK%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 3: INSTALLER SPOOFING (System Package) ---
+echo [ATTACK 3] Sistem Paketi Taklidi (-i android)...
+adb install -i "android" -r "%INPUT_APK%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 4: INSTALLER SPOOFING (Qualcomm Test) ---
+echo [ATTACK 4] Qualcomm Test Taklidi (-i com.qualcomm.qti.modemtestmode)...
+adb install -i "com.qualcomm.qti.modemtestmode" -r "%INPUT_APK%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 5: PM INSTALL (Direct Shell) ---
+echo [ATTACK 5] Dogrudan Shell PM Install...
+echo   [*] APK cihaza kopyalaniyor (/data/local/tmp/temp.apk)...
+adb push "%INPUT_APK%" /data/local/tmp/temp.apk
+echo   [*] Shell uzerinden yukleme deneniyor...
+adb shell pm install -r /data/local/tmp/temp.apk
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 6: PM INSTALL WITH OPTIONS ---
+echo [ATTACK 6] Shell PM Install (Bypass Options)...
+adb shell pm install -r -i "com.android.vending" --install-reason 3 /data/local/tmp/temp.apk
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+:: --- ATTACK 7: DISABLE VERIFICATION ---
+echo [ATTACK 7] Verification Disable (Global)...
+adb shell settings put global verifier_verify_adb_installs 0
+adb shell settings put global package_verifier_enable 0
+adb install -r "%INPUT_APK%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+echo   [!] Basarisiz.
+echo.
+
+echo ========================================================
+echo [X] TUM SALDIRILAR BASARISIZ OLDU.
+echo     Lutfen "Generate_All_Variants.bat" ile olusturulan
+echo     farkli APK varyasyonlarini deneyin.
+echo ========================================================
+goto :END
+
+:SUCCESS
+echo.
+echo ========================================================
+echo [!!!] BASARILI! APK YUKLENDI! [!!!]
+echo ========================================================
+
+:END
+:: Cleanup
+adb shell rm /data/local/tmp/temp.apk 2>nul
+pause

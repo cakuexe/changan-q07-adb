@@ -1,0 +1,62 @@
+import subprocess
+import time
+
+MAX_WAIT = 300        # maksimum gözləmə (saniyə)
+CHECK_INTERVAL = 2    # cihaz statusunu yoxlama intervalı (saniyə)
+
+def get_adb_devices():
+    try:
+        output = subprocess.check_output(["adb", "devices"], stderr=subprocess.STDOUT)
+        lines = output.decode().strip().split("\n")[1:]  # skip "List of devices"
+        devices = []
+        for line in lines:
+            if line.strip():
+                parts = line.split()
+                device_id = parts[0]
+                status = parts[1] if len(parts) > 1 else "unknown"
+                devices.append((device_id, status))
+        return devices
+    except Exception as e:
+        return []
+
+print("\n===============================")
+print("   ADB Authorization Watcher")
+print("===============================\n")
+
+print("Cihaz gözlənilir...\n")
+
+start_time = time.time()
+
+while True:
+    devices = get_adb_devices()
+
+    if devices:
+        for device_id, status in devices:
+            if status == "device":
+                print("\n=================================")
+                print("SUCCESS: Cihaz autorizasiya olundu!")
+                print(f"Device ID: {device_id}")
+                print("=================================\n")
+                exit(0)
+
+            elif status == "unauthorized":
+                print(f"Cihaz tapıldı, amma UNAUTHORIZED: {device_id}")
+                print(">> Telefonda RSA icazə pəncərəsi çıxmalıdır.")
+                print(">> Zəhmət olmasa 'Allow' edin.\n")
+
+            else:
+                print(f"Cihaz görüldü, status: {status}\n")
+
+    # Timeout yoxlaması
+    if time.time() - start_time > MAX_WAIT:
+        print("\n===================================")
+        print("FAILED: Maksimum gözləmə müddəti bitdi.")
+        print("===================================\n")
+        print("Problemin həlli:")
+        print("1) USB debugging aktiv olsun")
+        print("2) Ekranı kiliddən çıxarın")
+        print("3) RSA popup'da 'Allow' edin")
+        print("4) Lazımdırsa developer options → Revoke USB debugging authorizations")
+        exit(1)
+
+    time.sleep(CHECK_INTERVAL)

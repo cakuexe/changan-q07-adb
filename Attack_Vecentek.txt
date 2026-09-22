@@ -1,0 +1,77 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+echo ========================================================
+echo      USB INSTALLATION TOOL (NO PUSH/PULL)
+echo ========================================================
+echo.
+echo Bu arac, USB bellek uzerindeki APK'lari yuklemek icindir.
+echo.
+
+echo [1] Depolama Alanlari Listeleniyor...
+echo ----------------------------------------
+adb shell ls -d /storage/* /mnt/* /sdcard/* 2>nul
+echo ----------------------------------------
+echo.
+echo Lutfen yukaridaki listeden USB belleginizin yolunu tahmin edin.
+echo Genelde: /storage/udisk, /storage/sda1, /mnt/usb_storage vb.
+echo.
+
+set /p USB_PATH="USB Bellegin Yolu Nedir? (Orn: /storage/sda1): "
+echo.
+
+:FILE_LOOP
+echo ----------------------------------------
+echo USB icindeki yuklenecek APK ismini yazin.
+echo (Ornek: waze_signed_platform.apk)
+set /p APK_NAME="Dosya Ismi: "
+
+set "FULL_PATH=%USB_PATH%/%APK_NAME%"
+echo.
+echo [*] Hedef: %FULL_PATH%
+echo.
+
+echo [1] Normal Yukleme Deneniyor (pm install)...
+adb shell pm install -r "%FULL_PATH%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+
+echo.
+echo [2] Play Store Taklidi (-i vending)...
+adb shell pm install -r -i "com.android.vending" "%FULL_PATH%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+
+echo.
+echo [3] Sistem Taklidi (-i android)...
+adb shell pm install -r -i "android" "%FULL_PATH%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+
+echo.
+echo [4] Whitelist Taklidi (-i qualcomm)...
+adb shell pm install -r -i "com.qualcomm.qti.modemtestmode" "%FULL_PATH%"
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+
+echo.
+echo [5] Servisi Durdurup Yukleme (Hitman)...
+adb shell stop vecentekseservice
+adb shell setprop ctl.stop vecentekseservice
+adb shell pm install -r "%FULL_PATH%"
+adb shell start vecentekseservice
+if %ERRORLEVEL% EQU 0 goto :SUCCESS
+
+echo.
+echo [!] Tum denemeler basarisiz oldu.
+echo Lutfen dosya isminin ve USB yolunun dogru oldugundan emin olun.
+goto :RETRY
+
+:SUCCESS
+echo.
+echo ========================================================
+echo [!!!] BASARILI! APK YUKLENDI! [!!!]
+echo ========================================================
+echo.
+
+:RETRY
+set /p CHOICE="Baska dosya denemek ister misiniz? (E/H): "
+if /i "%CHOICE%"=="E" goto :FILE_LOOP
+
+pause

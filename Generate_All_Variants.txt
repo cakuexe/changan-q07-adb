@@ -1,0 +1,247 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+:: --- CONFIGURATION ---
+set "TOOLS_DIR=D:\Home\BatchApkTool\bin"
+set "OUTPUT_DIR=%~dp0"
+set "APKTOOL=%TOOLS_DIR%\apktool_2.10.0_20240226.jar"
+set "APKSIGNER=%TOOLS_DIR%\apksigner.jar"
+
+:: KEYS
+set "KEY_PLATFORM=%TOOLS_DIR%\platform.pk8"
+set "CERT_PLATFORM=%TOOLS_DIR%\platform.x509.pem"
+set "KEY_TEST=%TOOLS_DIR%\testkey.pk8"
+set "CERT_TEST=%TOOLS_DIR%\testkey.x509.pem"
+set "KEY_MEDIA=%TOOLS_DIR%\media.pk8"
+set "CERT_MEDIA=%TOOLS_DIR%\media.x509.pem"
+set "KEY_SHARED=%TOOLS_DIR%\shared.pk8"
+set "CERT_SHARED=%TOOLS_DIR%\shared.x509.pem"
+:: ---------------------
+
+echo ========================================================
+echo      ULTIMATE APK VARIANT GENERATOR (VECENTEK BYPASS)
+echo ========================================================
+echo.
+
+if "%~1"=="" (
+    echo [!] Lutfen bir APK dosyasini bu scriptin uzerine surukleyin!
+    pause
+    exit /b
+)
+
+set "INPUT_APK=%~1"
+set "FILENAME=%~n1"
+set "TEMP_DIR=%OUTPUT_DIR%\temp_gen_%FILENAME%"
+set "VARIANTS_DIR=%OUTPUT_DIR%\%FILENAME%_VARIANTS"
+
+if not exist "%VARIANTS_DIR%" mkdir "%VARIANTS_DIR%"
+
+echo [*] Hedef APK: %INPUT_APK%
+echo [*] Cikti Klasoru: %VARIANTS_DIR%
+echo.
+
+:: ==========================================================
+:: GROUP 1: SIGNATURE VARIANTS (No Decompile needed - Safe)
+:: ==========================================================
+echo [GROUP 1] Imza Varyasyonlari Olusturuluyor...
+
+echo   - Platform Key...
+java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\1_Signed_Platform.apk" "%INPUT_APK%"
+
+echo   - Test Key...
+java -jar "%APKSIGNER%" sign --key "%KEY_TEST%" --cert "%CERT_TEST%" --out "%VARIANTS_DIR%\2_Signed_TestKey.apk" "%INPUT_APK%"
+
+echo   - Media Key...
+java -jar "%APKSIGNER%" sign --key "%KEY_MEDIA%" --cert "%CERT_MEDIA%" --out "%VARIANTS_DIR%\3_Signed_Media.apk" "%INPUT_APK%"
+
+echo   - Shared Key...
+java -jar "%APKSIGNER%" sign --key "%KEY_SHARED%" --cert "%CERT_SHARED%" --out "%VARIANTS_DIR%\4_Signed_Shared.apk" "%INPUT_APK%"
+
+echo.
+
+:: ==========================================================
+:: GROUP 2: MANIFEST MODIFICATIONS (Requires Decompile)
+:: ==========================================================
+echo [GROUP 2] Manifest Modifikasyonlari (Decompile)...
+echo   [*] APK cozuluyor...
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+java -jar "%APKTOOL%" d -f -o "%TEMP_DIR%" "%INPUT_APK%"
+
+if not exist "%TEMP_DIR%\AndroidManifest.xml" (
+    echo   [!] Decompile HATASI! Karmasik APK (Waze/Chrome) olabilir.
+    echo   [!] Group 2 ve 3 atlaniyor. Sadece Group 1 dosyalari kullanilabilir.
+    goto :FINISH
+)
+
+:: --- Variant 5: System UID ---
+echo   - Variant 5: System UID Ekleme...
+copy "%TEMP_DIR%\AndroidManifest.xml" "%TEMP_DIR%\AndroidManifest.xml.bak" >nul
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v5.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v5.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\5_SystemUID_Platform.apk" "%TEMP_DIR%\dist\v5.apk"
+)
+:: Restore manifest
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 6: Debuggable ---
+echo   - Variant 6: Debuggable Flag...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<application', '<application android:debuggable=\"true\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v6.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v6.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\6_Debuggable_Platform.apk" "%TEMP_DIR%\dist\v6.apk"
+)
+:: Restore manifest
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+echo.
+
+:: ==========================================================
+:: GROUP 3: PACKAGE RENAMING (WHITELIST SPOOFING)
+:: ==========================================================
+echo [GROUP 3] Paket Ismi Degistirme (Whitelist Spoofing)...
+
+
+:: --- Variant 7: Rename to com.android.MultiplePdpTest ---
+echo   - Variant 7: Rename to com.android.MultiplePdpTest...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.android.MultiplePdpTest\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v7.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v7.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\7_Rename_com.android.MultiplePdpTest.apk" "%TEMP_DIR%\dist\v7.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 8: Rename to com.android.carrierconfig ---
+echo   - Variant 8: Rename to com.android.carrierconfig...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.android.carrierconfig\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v8.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v8.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\8_Rename_com.android.carrierconfig.apk" "%TEMP_DIR%\dist\v8.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 9: Rename to com.android.networkstack.permissionconfig ---
+echo   - Variant 9: Rename to com.android.networkstack.permissionconfig...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.android.networkstack.permissionconfig\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v9.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v9.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\9_Rename_com.android.networkstack.permissionconfig.apk" "%TEMP_DIR%\dist\v9.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 10: Rename to com.qti.qualcomm.datastatusnotification ---
+echo   - Variant 10: Rename to com.qti.qualcomm.datastatusnotification...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qti.qualcomm.datastatusnotification\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v10.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v10.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\10_Rename_com.qti.qualcomm.datastatusnotification.apk" "%TEMP_DIR%\dist\v10.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 11: Rename to com.qti.qualcomm.deviceinfo ---
+echo   - Variant 11: Rename to com.qti.qualcomm.deviceinfo...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qti.qualcomm.deviceinfo\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v11.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v11.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\11_Rename_com.qti.qualcomm.deviceinfo.apk" "%TEMP_DIR%\dist\v11.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 12: Rename to com.qualcomm.atfwd ---
+echo   - Variant 12: Rename to com.qualcomm.atfwd...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qualcomm.atfwd\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v12.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v12.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\12_Rename_com.qualcomm.atfwd.apk" "%TEMP_DIR%\dist\v12.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 13: Rename to com.qualcomm.embms ---
+echo   - Variant 13: Rename to com.qualcomm.embms...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qualcomm.embms\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v13.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v13.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\13_Rename_com.qualcomm.embms.apk" "%TEMP_DIR%\dist\v13.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 14: Rename to com.qualcomm.embmstest ---
+echo   - Variant 14: Rename to com.qualcomm.embmstest...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qualcomm.embmstest\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v14.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v14.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\14_Rename_com.qualcomm.embmstest.apk" "%TEMP_DIR%\dist\v14.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 15: Rename to com.qualcomm.location ---
+echo   - Variant 15: Rename to com.qualcomm.location...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qualcomm.location\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v15.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v15.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\15_Rename_com.qualcomm.location.apk" "%TEMP_DIR%\dist\v15.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:: --- Variant 16: Rename to com.qualcomm.location.XT ---
+echo   - Variant 16: Rename to com.qualcomm.location.XT...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"com.qualcomm.location.XT\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+:: Also add system UID for good measure
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\v16.apk" "%TEMP_DIR%"
+if exist "%TEMP_DIR%\dist\v16.apk" (
+    java -jar "%APKSIGNER%" sign --key "%KEY_PLATFORM%" --cert "%CERT_PLATFORM%" --out "%VARIANTS_DIR%\16_Rename_com.qualcomm.location.XT.apk" "%TEMP_DIR%\dist\v16.apk"
+)
+:: Restore manifest for next loop
+copy "%TEMP_DIR%\AndroidManifest.xml.bak" "%TEMP_DIR%\AndroidManifest.xml" >nul
+
+:FINISH
+:: Cleanup
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+
+echo.
+echo ========================================================
+echo [OK] ISLEM TAMAMLANDI!
+echo Olusan dosyalar: %VARIANTS_DIR%
+echo.
+echo Lutfen bu klasordeki APK'lari sirayla deneyin.
+echo En guclu adaylar: 1, 5 ve Whitelist olanlar.
+echo ========================================================
+pause

@@ -1,0 +1,84 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+:: --- CONFIGURATION ---
+set "TOOLS_DIR=D:\Home\BatchApkTool\bin"
+set "OUTPUT_DIR=%~dp0"
+set "APKTOOL=%TOOLS_DIR%\apktool_2.10.0_20240226.jar"
+set "APKSIGNER=%TOOLS_DIR%\apksigner.jar"
+set "PLATFORM_KEY=%TOOLS_DIR%\platform.pk8"
+set "PLATFORM_CERT=%TOOLS_DIR%\platform.x509.pem"
+
+:: TARGET PACKAGE NAME (Whitelisted)
+set "NEW_PACKAGE_NAME=com.kugou.android.auto"
+:: ---------------------
+
+echo ========================================================
+echo      APK PACKAGE RENAMER for VECENTEK BYPASS
+echo ========================================================
+echo.
+echo Hedef Paket Ismi: %NEW_PACKAGE_NAME%
+echo.
+
+if "%~1"=="" (
+    echo [!] Lutfen bir APK dosyasini bu scriptin uzerine surukleyin!
+    echo.
+    pause
+    exit /b
+)
+
+set "INPUT_APK=%~1"
+set "FILENAME=%~n1"
+set "TEMP_DIR=%OUTPUT_DIR%\temp_rename_%FILENAME%"
+
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+
+echo [*] Islem basliyor: %INPUT_APK%
+echo.
+
+:: 1. Decompile
+echo [1/4] APK cozuluyor (Decompile)...
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+java -jar "%APKTOOL%" d -f -o "%TEMP_DIR%" "%INPUT_APK%"
+
+if not exist "%TEMP_DIR%\AndroidManifest.xml" (
+    echo [!] Decompile hatasi!
+    pause
+    exit /b
+)
+
+:: 2. Rename Package in Manifest
+echo [2/4] Paket ismi degistiriliyor...
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace 'package=\"[^\"]+\"', 'package=\"%NEW_PACKAGE_NAME%\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+:: Add sharedUserId just in case
+powershell -Command "(Get-Content '%TEMP_DIR%\AndroidManifest.xml') -replace '<manifest', '<manifest android:sharedUserId=\"android.uid.system\"' | Set-Content '%TEMP_DIR%\AndroidManifest.xml'"
+
+:: 3. Recompile
+echo [3/4] APK tekrar paketleniyor (Recompile)...
+java -jar "%APKTOOL%" b -o "%TEMP_DIR%\dist\renamed.apk" "%TEMP_DIR%"
+
+if not exist "%TEMP_DIR%\dist\renamed.apk" (
+    echo [!] Paketleme hatasi!
+    pause
+    exit /b
+)
+
+:: 4. Sign
+echo [4/4] Imzalaniyor (Platform Key)...
+java -jar "%APKSIGNER%" sign --key "%PLATFORM_KEY%" --cert "%PLATFORM_CERT%" --out "%OUTPUT_DIR%\%FILENAME%_renamed_whitelisted.apk" "%TEMP_DIR%\dist\renamed.apk"
+
+if %ERRORLEVEL% EQU 0 (
+    echo.
+    echo [OK] BASARILI!
+    echo Dosya: %OUTPUT_DIR%\%FILENAME%_renamed_whitelisted.apk
+    echo.
+    echo Bu APK artik sistem tarafindan "%NEW_PACKAGE_NAME%" olarak gorunecek.
+) else (
+    echo [!] Imzalama hatasi!
+)
+
+:: Cleanup
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+
+pause

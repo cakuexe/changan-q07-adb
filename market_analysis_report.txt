@@ -1,0 +1,102 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: ============================================
+:: ADB Authorization Retry Script
+:: ============================================
+:: This script repeatedly restarts the ADB server
+:: until a device appears as authorized or max
+:: retries are reached.
+:: ============================================
+
+:: Configuration
+set MAX_RETRIES=20
+set DELAY_BETWEEN_RETRIES=3
+set INITIAL_DELAY=5
+
+:: ============================================
+
+echo.
+echo ========================================
+echo ADB Authorization Retry Script
+echo ========================================
+echo Max retries: %MAX_RETRIES%
+echo Delay between retries: %DELAY_BETWEEN_RETRIES% seconds
+echo Initial delay: %INITIAL_DELAY% seconds
+echo ========================================
+echo.
+
+:: Initial delay to allow system to stabilize after boot
+echo Waiting %INITIAL_DELAY% seconds for system to stabilize...
+timeout /t %INITIAL_DELAY% /nobreak >nul
+
+set RETRY_COUNT=0
+
+:retry_loop
+set /a RETRY_COUNT+=1
+echo.
+echo [Attempt %RETRY_COUNT%/%MAX_RETRIES%] Restarting ADB server...
+
+:: Kill ADB server
+adb kill-server >nul 2>&1
+timeout /t 1 /nobreak >nul
+
+:: Start ADB server
+echo Starting ADB server...
+adb start-server >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+:: Check device status
+echo Checking device status...
+for /f "tokens=1,2" %%a in ('adb devices 2^>nul ^| findstr /v "List"') do (
+    set DEVICE_ID=%%a
+    set DEVICE_STATUS=%%b
+    
+    if not "!DEVICE_ID!"=="" (
+        if "!DEVICE_STATUS!"=="device" (
+            echo.
+            echo ========================================
+            echo SUCCESS: Device authorized!
+            echo Device ID: !DEVICE_ID!
+            echo ========================================
+            echo.
+            goto end_success
+        ) else if "!DEVICE_STATUS!"=="unauthorized" (
+            echo Device found but UNAUTHORIZED: !DEVICE_ID!
+            echo Check your device for the RSA authorization popup.
+        ) else (
+            echo Device found with status: !DEVICE_STATUS!
+        )
+    )
+)
+
+:: Check if max retries reached
+if %RETRY_COUNT% geq %MAX_RETRIES% (
+    echo.
+    echo ========================================
+    echo FAILED: Maximum retry count reached.
+    echo ========================================
+    echo.
+    echo Troubleshooting steps:
+    echo 1. Check USB cable connection
+    echo 2. Enable USB debugging on device
+    echo 3. Unlock your device screen
+    echo 4. Check for RSA authorization popup
+    echo 5. Try revoking USB debugging authorizations:
+    echo    Developer Options ^> Revoke USB debugging authorizations
+    echo.
+    goto end_failure
+)
+
+:: Wait before next retry
+echo Waiting %DELAY_BETWEEN_RETRIES% seconds before next attempt...
+timeout /t %DELAY_BETWEEN_RETRIES% /nobreak >nul
+goto retry_loop
+
+:end_success
+pause
+exit /b 0
+
+:end_failure
+pause
+exit /b 1
