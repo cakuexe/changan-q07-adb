@@ -1,2 +1,14 @@
-# changan-q07-adb
-🚗 Changan Qiyuan Q07  🇷🇺 v1.2.0 — Russian Language + Apps  🔓 v1.2.1–1.4.0 — ADB Access + Full Instructions
+🚗 Changan Qiyuan Q07 | Software Release
+
+📦 Older versions released for educational purposes.
+
+🇷🇺 Russian Language + Apps | v1.2.0
+
+🔓 ADB Access + Instructions | v1.2.1–1.4.0
+
+🚀 Need Russian language or app support for newer versions?
+
+📩 Contact me on Telegram: @caku242
+
+t.me/SilkRoadAZ 
+https://tgstat.com/chat/@SilkRoadAZ/stat/subscribers
