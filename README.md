@@ -12,3 +12,5 @@
 
 t.me/SilkRoadAZ 
 https://tgstat.com/chat/@SilkRoadAZ/stat/subscribers
+
+full with russian - https://drive.google.com/drive/folders/1mNNYD0PCA7hrrVSMaVxtd6GT933jodTh 
